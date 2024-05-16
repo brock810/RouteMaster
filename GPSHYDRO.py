@@ -1,12 +1,9 @@
 import os
+import heapq
+import logging
+import xml.etree.ElementTree as ET
 import osmnx as ox
 import networkx as nx
-import heapq
-import matplotlib.pyplot as plt
-import logging
-import folium
-import xml.etree.ElementTree as ET  # Import XML parsing library
-import re
 
 logging.basicConfig(level=logging.INFO)
 
@@ -37,10 +34,10 @@ def dijkstra(graph, start):
         logging.error("Error occurred in Dijkstra's algorithm: %s", e)
         return None
 
+
 def parse_gpx_data(gpx_data_string):
     waypoints = []
     try:
-        import xml.etree.ElementTree as ET
         root = ET.fromstring(gpx_data_string)
         for trkpt in root.findall(".//{http://www.topografix.com/GPX/1/1}trkpt"):
             lat = float(trkpt.get("lat"))
@@ -48,22 +45,22 @@ def parse_gpx_data(gpx_data_string):
             ele = float(trkpt.find("{http://www.topografix.com/GPX/1/1}ele").text)
             waypoints.append((lat, lon, ele))
     except Exception as e:
-        print("Failed to parse GPX data from string.")
-        print(e)
+        logging.error("Failed to parse GPX data from string: %s", e)
     return waypoints
+
 
 def add_edge_weights(graph):
     for u, v, data in graph.edges(data=True):
         length = data.get('length', 1.0)
-        road_type = data.get('highway', 'unknown')  # Assume 'highway' attribute contains road type
-        road_condition = data.get('surface', 'unknown')  # Assume 'surface' attribute contains road condition
-        # Assign weights based on road type and condition
+        road_type = data.get('highway', 'unknown')
+        road_condition = data.get('surface', 'unknown')
+
         if road_type == 'track' and road_condition == 'gravel':
-            weight = length * 0.8  # Adjust weight for gravel tracks
+            weight = length * 0.8
         elif road_type == 'path':
-            weight = length * 1.2  # Adjust weight for paths
+            weight = length * 1.2
         else:
-            weight = length  # Default weight
+            weight = length
         data['weight'] = weight
 
 
@@ -83,10 +80,9 @@ def find_fastest_route(graph, start_node, end_node):
 def convert_coordinates_to_nodes(graph, coordinates):
     nodes = []
     for coord in coordinates:
-        node = ox.distance.nearest_nodes(graph, coord[0], coord[1])
+        node = ox.distance.nearest_nodes(graph, coord[1], coord[0])
         nodes.append(node)
     return nodes
-
 
 
 def get_directions(graph, path):
@@ -106,40 +102,80 @@ def get_directions(graph, path):
 
 
 if __name__ == "__main__":
-    # Get the directory of the script
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    # Construct the file path to the GPX file
-    gpx_file_path = os.path.join(script_dir, "current.gpx")
 
-    # Read GPX data from file
-    try:
-        with open(gpx_file_path, "r") as f:
-            gpx_data_from_file = f.read()
-    except FileNotFoundError:
-        print(f"Error: File '{gpx_file_path}' not found.")
-        gpx_data_from_file = None
+    graph = ox.graph_from_place("Piedmont, California, USA", network_type='bike')
+    add_edge_weights(graph)
 
-    # Parse the GPX data from the file
-    waypoints_from_file = parse_gpx_data(gpx_data_from_file)
+    gpx_data_string = """<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+<gpx version="1.1" creator="Brock" xmlns="http://www.topografix.com/GPX/1/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
+  <metadata>
+    <name>Route1</name>
+    <desc>Route 1</desc>
+    <author>
+      <name>Brock</name>
+    </author>
+    <time>2024-05-16T12:00:00Z</time>
+  </metadata>
+  <wpt lat="37.7749" lon="-122.4194">
+    <ele>10</ele>
+    <time>2024-05-16T12:00:00Z</time>
+    <name>Start</name>
+    <desc>Starting point of the route</desc>
+  </wpt>
+  <wpt lat="37.7799" lon="-122.4144">
+    <ele>15</ele>
+    <time>2024-05-16T12:10:00Z</time>
+    <name>Waypoint 1</name>
+    <desc>First waypoint</desc>
+  </wpt>
+  <trk>
+    <name>Route 2</name>
+    <desc>Example track for mountain biking</desc>
+    <trkseg>
+      <trkpt lat="37.7749" lon="-122.4194">
+        <ele>10</ele>
+        <time>2024-05-16T12:00:00Z</time>
+      </trkpt>
+      <trkpt lat="37.7759" lon="-122.4184">
+        <ele>12</ele>
+        <time>2024-05-16T12:05:00Z</time>
+      </trkpt>
+      <trkpt lat="37.7769" lon="-122.4174">
+        <ele>14</ele>
+        <time>2024-05-16T12:10:00Z</time>
+      </trkpt>
+      <trkpt lat="37.7779" lon="-122.4164">
+        <ele>16</ele>
+        <time>2024-05-16T12:15:00Z</time>
+      </trkpt>
+      <trkpt lat="37.7789" lon="-122.4154">
+        <ele>18</ele>
+        <time>2024-05-16T12:20:00Z</time>
+      </trkpt>
+      <trkpt lat="37.7799" lon="-122.4144">
+        <ele>20</ele>
+        <time>2024-05-16T12:25:00Z</time>
+      </trkpt>
+    </trkseg>
+  </trk>
+</gpx>"""
 
-    # Example GPX data string
-    your_gpx_data_string = """<your GPX data string here>"""
+    waypoints = parse_gpx_data(gpx_data_string)
 
-    # Parse the GPX data directly from string
-    waypoints_from_string = parse_gpx_data(your_gpx_data_string)
+    nodes = convert_coordinates_to_nodes(graph, waypoints)
 
-    # Print waypoints from file
-    print("Waypoints from file:")
-    if waypoints_from_file:
-        for i, coord in enumerate(waypoints_from_file, 1):
-            print(f"Waypoint {i}: Latitude {coord[0]}, Longitude {coord[1]}, Elevation {coord[2]}")
+    if len(nodes) >= 2:
+        start_node = nodes[0]
+        end_node = nodes[-1]
+
+        path = find_fastest_route(graph, start_node, end_node)
+
+        if path:
+            directions = get_directions(graph, path)
+            print("Turn-by-turn directions:")
+            for direction in directions:
+                print(direction)
+        else:
+            print("Failed to find a route.")
     else:
-        print("Failed to parse GPX data from file.")
-
-    # Print waypoints from string
-    print("\nWaypoints from string:")
-    if waypoints_from_string:
-        for i, coord in enumerate(waypoints_from_string, 1):
-            print(f"Waypoint {i}: Latitude {coord[0]}, Longitude {coord[1]}, Elevation {coord[2]}")
-    else:
-        print("Failed to parse GPX data from string.")
+        print("Insufficient waypoints to determine a route.")
